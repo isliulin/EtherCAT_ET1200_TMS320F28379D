@@ -1,56 +1,125 @@
-/***************************************************************************
- * 文件名称: ethercat_slave_c28x_hal.c
- * 文件说明: 用于EtherCAT从控制器(ESC)的C28x HAL硬件功能驱动
- * 功能说明:
- *         (1)本驱动适用于EtherCAT控制器ET1200/ET1100
- *         (2)本驱动适用于C28x内核的DSP控制器
- *         (3)本驱动可使用LaunchPad_F28379D评估板测试
- *            如果使用评估板,在全局宏定义中定义_LAUNCHXL_F28379D
- *从站器件说明:
- *         (1)器件ET1100/ET1200读写寄存器帧格式:
- *            读寄存器:
- *            1.三字节地址模式读寄存器
- *            Byte 0: A[12:5]  //寄存器地址5到12位
- *            Byte 1: A[4:0] + 110B, //寄存器地址0到4位 + 110B(三字节模式命令)
- *            Byte 2: A[15:13] + 010B + 00b //寄存器地址13到15位 + 010B(读数据模式)
- *            Byte 3: 0xFF //读取数据结束字节
- *            2.二字节地址模式读寄存器
- *            3.三字节地址模式写寄存器
- *            Byte 0: A[12:5]  //寄存器地址5到12位
- *            Byte 1: A[4:0] + 110b //寄存器地址0到4位  + 110B(三字节模式命令)
- *            Byte 2: A[15:13] + 100b + 00b //寄存器地址13到15位 +100B(写数据模式)
- *            4.二字节地址迷失写寄存器
- * 完成时间:
- *    版本:
- * 修改记录:
- * *************************************************************************/
-#include "F28x_Project.h"
+﻿//#############################################################################
+//
+// FILE:   ethercat_slave_c28x_hal.c
+//
+// TITLE:  C28x HAL level functions for EtherCAT slave controller (ESC)
+//
+//! \addtogroup C2k_EtherCAT_adapater_examples_list
+//! <h1> PDI Interface test Example </h1>
+//!
+//! The functions in this file provide a HAL layer interface for EtherCAT slave
+//! applications that can be built on C2k EtherCAT adapter board
+//!
+//! The HAL could be EMIF or SPI based depending on the PDI interface chosen
+//! or configured for the C2k ET1100 EtherCAT adapater board
+//!
+//!-----------------------------------------------------------------------------
+//! C28x Addressing vs. TwinCat3 software addresses for EMIF PDI
+//!   The C28x address used below is a WORD (16b) address for the ET1100 PDI
+//!   interface, while Beckhoff EtherCAT documentation and TwinCat3 software use
+//!   BYTE addresses. The USER RAM on the ET1100 starts at 0x1000 offset BYTE
+//!   address. Divide this by 2 to get the correct 16b word offset from EMIF2
+//!   start address
+//!
+//!  EMIF PDI reads two bytes at a time from ET1100 address space, that is the
+//!  minimum data size thats readable by C28x CPU
+//!------------------------------------------------------------------------------
+//!------------------------------------------------------------------------------
+//! C28x Addressing vs. TwinCat3 software addresses for SPI PDI
+//!   For the SPI PDI the addressing of ET1100 memory space is straight forward
+//!   The SPI PDI uses 8 bit character length for SPI reads/writes but the HAL API
+//!   is adjusted to read 16bits at a time to be consistent with the EMIF PDI.
+//!   Users can modify the SPI PDI to read/write one byte at a time from ET1100
+//!   address space. But since C28x data bus is 16 bit wide this example shows
+//!   16bit SPI PDI reads/writes as well.
+//!
+//!   SPI MISO pin read for error status on the last transaction is not supported
+//!      in this HAL
+//!   SPI MODE 3 is supported by this HAL
+//!   I0 and I1 byte reads on the MISO pin are ignored in this HAL
+//!------------------------------------------------------------------------------
+//! \b External \b Connections \n
+//!  Users can connect a PC running TWINCAT3 to the Ethercat Slave and view the
+//!  memory window of ET1100 for both registers and ET1100 RAM
+//!
+//! \b Watch \b Variables \n
+//!  - escRegs data structure is filled in with some ET1100 registers which can be
+//!    viewed in memory window if HAL Test is enabled.
+//!
+//!
+////###########################################################################
+// $TI Release: C2000 EtherCAT solutions support v1.00 $
+// $Release Date: 07/2017 $
+// $Copyright:
+// Copyright (C) 2017 Texas Instruments Incorporated - http://www.ti.com/
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//
+//   Redistributions of source code must retain the above copyright
+//   notice, this list of conditions and the following disclaimer.
+//
+//   Redistributions in binary form must reproduce the above copyright
+//   notice, this list of conditions and the following disclaimer in the
+//   documentation and/or other materials provided with the
+//   distribution.
+//
+//   Neither the name of Texas Instruments Incorporated nor the names of
+//   its contributors may be used to endorse or promote products derived
+//   from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// $
+//#############################################################################
+
+//
+// Included Files
+//
+#include "F28x_Project.h"     // Device Headerfile and Examples Include File
 #include "F2837xD_spi.h"
 #include "ethercat_slave_c28x_hal.h"
-/*****************************EMIF接口数据************************************/
-#ifdef INTERFACE_EMIF
-//指向ESC存储器的指针，在仅用于ASYNC16（EMIF1或EMIF2）PDI的ESC_initHW()中初始化
+
+//
+// Defines
+//
+//#define ETHERCAT_STACK  1   //only use if EtherCAT slave stack is used
+
+//
+//globals
+//
+
+//Pointer to the ESC memory, initialized in the ESC_initHW()
+//used only for the ASYNC16 (EMIF1 or EMIF2) PDI
 uint16_t *pEsc;
-#endif //INTERFACE_EMIF
-/**************************PDI_HAL_TEST功能数据*******************************/
+
 #ifdef PDI_HAL_TEST
-#if(HAL_ET1100)
-//调试数组以记录ESC寄存器，仅用于PDI_HAL_TEST
+//Debug array to log esc registers, used only for PDI HAL TEST
 esc_et1100_regs_t escRegs[ESC_DEBUG_REGS_LENGTH];
-#elif(HAL_ET1200)
-//调试数组以记录ESC寄存器，仅用于PDI_HAL_TEST
-esc_et1200_regs_t escRegs[ESC_DEBUG_REGS_LENGTH];
-#endif //#if HAL_ET1100
-#endif//#ifdef PDI_HAL_TEST
-/******************************SPI接口数据************************************/
+#endif
+
 #ifdef INTERFACE_SPI
-//----------------------------指向SPI寄存器指针---------------------------------
-volatile struct SPI_REGS *SpixRegs;
-//----------------------------SPI数据接收缓冲区---------------------------------
-volatile uint16_t   SPI_RxData[16];
-#endif//#ifdef INTERFACE_SPI
-/*****************************接口函数加载RAM**********************************/
+// SPI Variables
+volatile uint16_t   SPI_RxData[16];     // Receive data buffer
+volatile uint16_t   SPI_XmitInProgress;
+#endif
+
+
+//
+//HAL level functions
+//
 #ifndef __cplusplus
+
 #ifdef INTERFACE_SPI
 #pragma CODE_SECTION(ESC_readSPI, ".TI.ramfunc");
 #pragma CODE_SECTION(ESC_writeSPI, ".TI.ramfunc");
@@ -58,175 +127,245 @@ volatile uint16_t   SPI_RxData[16];
 #pragma CODE_SECTION(ESC_timerIncPerMilliSec, ".TI.ramfunc");
 #pragma CODE_SECTION(ESC_getTimer, ".TI.ramfunc");
 #endif
-/***************************************************************************
-          函数名称: ESC_getTimer
-          函数描述: 获取定时器时间
-          输入参数:
-              返回值: 当前CPU_TIMER0计数器值的取反值
-***************************************************************************/
+
+/***********************************************************************************/
+
 uint32_t ESC_getTimer(void)
 {
-    //定时器为减定时器，所有需返回定时器值的取反值
+    //C28x timer is decrements from 0xFFFFFFFF while the stack understands it as of 
+    //increment type. 
     return ~ ((uint32_t)(CpuTimer0Regs.TIM.all));
 }
-/***************************************************************************
-          函数名称: ESC_clearTimer
-          函数描述: 清除定时器时间(CPU_TIME0)
-          输入参数:
-              返回值:
-***************************************************************************/
+/***********************************************************************************/
 void ESC_clearTimer(void)
 {
-    /*寄存器版*/
     CpuTimer0Regs.TIM.all = 0;
-    /*driverlib版*/
-
 }
-/***************************************************************************/
-
+/***********************************************************************************/
 uint32_t ESC_timerIncPerMilliSec(void)
 {
     return (uint32_t) 200000UL; //at 200MHz
 }
-/***************************************************************************/
+/***********************************************************************************/
 #ifdef INTERFACE_SPI
-/***************************************************************************
+//
+// SPI HAL functions for EtherCAT slave stack
+//
+
+//SPI peripehral register pointer, will be initialized depending on the SPI chosen as per
+// build configurations
+volatile struct SPI_REGS *SpixRegs;
+
+/*****************************************************************************************
+ * @fn          ESC_readSPI
+ * @brief       读取寄存器数据，三字节地址模式，最大一次读取12字节数据
  *
- *  EtherCAT从控制器SPI硬件接口函数
+ * @param
+ *     offset_addr  - ESC address from which data has to be read
+ *     numbytes     - number of bytes to be read, limited to 12 at a time by the caller
+ *     buffer       - pointer to the buffer where read data has to be copied to
+ *                  - if a NULL is passed then data is copied to SPI_RxData global array
  *
- * *************************************************************************/
-/****************************************************************************
-          函数名称: ESC_readSPI
-          函数描述: 读取数据
-          输入参数:
-           offset_addr  数据读取的ESC地址
-           numbytes     读取的字节数，限制为12个
-           buffer       指向读取数据缓冲区的指针，存储为16位字的方式
-              返回值:
-****************************************************************************/
+ * @return          - None
+ ****************************************************************************************/
 void ESC_readSPI(uint16_t offset_addr,uint16_t numbytes, uint16_t* buffer)
 {
     uint16_t i,readval;
     uint16_t readphase[16];
-//  Byte 0: A[12:5]                 //寄存器地址5到12位
-//  Byte 1: A[4:0], CMD[2:0]        //寄存器地址0到4位+110b(三字节模式命令)
-//  Byte 2: A[15:13], CMD[2:0], 00b //寄存器地址13到15位 +010b(读数据模式)
-//  Byte 3: FFh                     //帧结束字节
-    //装载第一个字节：地址5到12位
+    uint16_t *buf = (uint16_t *)0;
+
+  if(((void *)buffer) == NULL)
+   {
+      buf = (uint16_t *)&SPI_RxData[0];
+   }
+   else
+   {
+    buf = buffer;
+   }
+        //三字节地址帧格式
+        // SPI模式为高位在前，低字节在前
+        // 读数据帧格式:
+        // Byte 0: A[12:5]    //地址的5-12位
+        // Byte 1: A[4:0], 110b             (110b为三字节地址命令)
+        // Byte 2: A[15:13], CMD[2:0], 00b  (010b为读数据命令)
+    //计算第一个字节(全部高位对齐)
     readphase[0] =(offset_addr & 0x1FE0)<<3;
-    //装载第二个字节：110B(三字节地址模式)+地址0到4位
-    readphase[1] =(((offset_addr & 0x1F) << 3) | ESC_ETHERCAT_3BYTEADDR) << 8;
-    //装载第三个字节：地址13到15位+010B(读数据模式)+00
-    readphase[2] = (offset_addr & 0xE000) | (ESC_ETHERCAT_READ << 10);
-    //装载空字节读取字节数据(装载数量由读取字节个数决定)
-    for(i = 0; i < numbytes; i++)
-    {
-        readphase[i+3] = (uint16_t) ESC_ETHERCAT_CONTINUE << 8;
+    //第二个字节
+    readphase[1] =(((offset_addr & 0x1F) << 3) | ESC_ETHERCAT_3BYTEADDR)<<8;//0-5λ��ַ��3�ֽڵ�ַ����
+    //第三个字节
+    readphase[2] = (offset_addr & 0xE000) | (ESC_ETHERCAT_READ <<10);//13-15λ��ַ�Ͷ���������
+    //装载对应数据量的00字节
+    for(i=0; i<numbytes; i++){
+        readphase[i+3] = (uint16_t) ESC_ETHERCAT_CONTINUE<<8;
     }
-    //装载帧结束字节0xFF
-    readphase[numbytes+2] = (uint16_t)ESC_ETHERCAT_RDTERMINATE << 8;
-    //使能SPI片选信号
-    ESC_SPI_CS_0();
-    //发送帧数据
-    for(i = 0;i < numbytes + 3; i++)
+    //最后一个字节以0xFF结尾
+    readphase[numbytes+2] = (uint16_t)ESC_ETHERCAT_RDTERMINATE<<8;
+#ifdef  USE_SPIB
+    GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;//SPIB片选信号
+#endif
+#ifdef  USE_SPIA
+    GpioDataRegs.GPBCLEAR.bit.GPIO61 = 1;//SPIA片选信号
+#endif
+
+            asm(" NOP");    //need 15ns delay
+            asm(" NOP");
+            asm(" NOP");
+            asm(" NOP");
+    //发送前三个地址
+    for (i = 0; i < 3; i++)
     {
         SpixRegs->SPITXBUF = readphase[i];
     }
-    //等待接收到读取数量的字节数据
-    while (SpixRegs->SPIFFRX.bit.RXFFST < (numbytes + 3))
+    //等待地址发送完成
+    while (SpixRegs->SPIFFTX.bit.TXFFST > 0);
+    //延时300ns
+    for (i = 0; i < 4; i++)
     {
         asm(" NOP");
-        asm(" NOP");
-        asm(" NOP");
     }
-    //忽略非有效数据的字节
-    while (SpixRegs->SPIFFRX.bit.RXFFST > numbytes)
+   //发送读取字节数据
+    for (i = 3; i < numbytes + 3; i++)
     {
-        readval = SpixRegs->SPIRXBUF;
+        SpixRegs->SPITXBUF = readphase[i];
     }
-    //读取有效数据
-    for (i = 0; (SpixRegs->SPIFFRX.bit.RXFFST > 0); i++)
-    {
-        //读取低字节
-        readval = (SpixRegs->SPIRXBUF) & 0xFF;
-        buffer[i] = (readval & 0xFF);
-        //读取高字节
-        readval = (SpixRegs->SPIRXBUF) & 0xFF;
-        buffer[i] |= ((readval & 0xFF) << 8);
-    }
-    //SPI复位
-    DELAY_US(5);
-    SpixRegs->SPIFFTX.bit.TXFIFO=0;
-    SpixRegs->SPIFFRX.bit.RXFIFORESET = 0;
+
+       SPI_XmitInProgress=1;
+    //等待接收到数据
+        while(SpixRegs->SPIFFRX.bit.RXFFST < (numbytes+3))
+        {
+            asm(" NOP");    //need 12ns delay
+            asm(" NOP");
+            asm(" NOP");
+        }
+    //忽略前三个地址数据
+        while(SpixRegs->SPIFFRX.bit.RXFFST > numbytes)
+        {
+
+            readval = SpixRegs->SPIRXBUF; //ignore
+
+        }
+    //读取数据
+        for(i=0;(SpixRegs->SPIFFRX.bit.RXFFST > 0);i++)
+        {
+            readval = (SpixRegs->SPIRXBUF) & 0xFF;
+            buf[i]= (readval & 0xFF);
+
+            readval = (SpixRegs->SPIRXBUF) & 0xFF;
+            buf[i] |= ((readval & 0xFF) << 8);
+        }
+#ifdef USE_SPIB
+    GpioDataRegs.GPCSET.bit.GPIO66 = 1;//SPIB片选
+#endif
+#ifdef USE_SPIA
+    GpioDataRegs.GPBSET.bit.GPIO61 = 1;//SPIA片选
+#endif
+    //SPIFIFO复位
     DELAY_US(2);
-    SpixRegs->SPIFFTX.bit.TXFIFO=1;
-    SpixRegs->SPIFFRX.bit.RXFIFORESET = 1;
-    //失能SPI片选信号
-    ESC_SPI_CS_1();
+    SpixRegs->SPIFFTX.bit.TXFIFO=0;     // Reset Tx FIFO
+    SpixRegs->SPIFFRX.bit.RXFIFORESET = 0; //reset the FIFO pointer
+    DELAY_US(2);
+    SpixRegs->SPIFFTX.bit.TXFIFO=1;     // Reenable Tx FIFO
+    SpixRegs->SPIFFRX.bit.RXFIFORESET = 1; //reenable the FIFO operation
+
+    SPI_XmitInProgress=0;
+
 }
 #define FIFO_LENGTH     12
-/************************************************************************************
-          函数名称: ESC_writeSPI
-          函数描述: 写入数据
-          输入参数:
-           offset_addr  数据写入的ESC地址
-           numbytes     写入的字节数，限制为12个
-           wrdata       指向缓冲区的指针，存储为16位字的方式
-              返回值:
-*************************************************************************************/
+/*****************************************************************************************
+ * @fn          ESC_writeSPI
+ * @brief       function writes up to 12 bytes of data
+ *
+ * @param
+ *     offset_addr  - ESC address to which data has to written to
+ *     numbytes     - number of bytes to be written to, limited to 12 at a time by the caller
+ *     wrdata       - pointer to the buffer from where data has to be written to ESC
+ *
+ *
+ * @return       - none
+ ****************************************************************************************/
 void ESC_writeSPI(uint16_t offset_addr,uint16_t *wrdata, uint16_t numbytes)
 {
-    //16位字发送计数器
-    uint16_t numwords = 0;
-    //帧数据缓冲区
-    uint16_t writebuffer[3];
+    uint16_t i, j,cmd, numwords = 0;
+    uint16_t wptr = 0;
+    uint16_t writephase[2];
+
+    // Construct Address cmd bytes into 16-bit words for SPI xmission,
+    //    SPI xmits MSBit 1st, so must swap bytes in this 16b word for transmission
+    // Byte order of READ cmd sequence:
     // Byte 0: A[12:5]
     // Byte 1: A[4:0], 110b             (110b is 3-byte cmd extension)
     // Byte 2: A[15:13], CMD[2:0], 00b  (110b is 3-byte cmd extension)
-    //装载第一个字节:地址5到12位
-    writebuffer[0] = (offset_addr & 0x1FE0) << 3;
-    //装载第二个字节:110B(三字节地址模式)+地址0到4位
-    writebuffer[1] = (((offset_addr & 0x1F) << 3) | ESC_ETHERCAT_3BYTEADDR) << 8;
-    //装载第三个字节:地址13到15位+100B(写数据命令)+00B
-    writebuffer[2] = (offset_addr & 0xE000) | (ESC_ETHERCAT_WRITE << 10);
-    //使能SPI片选信号
-    ESC_SPI_CS_0();
-    //延时15ns
-    asm(" NOP");
-    asm(" NOP");
-    asm(" NOP");
-    asm(" NOP");
-    asm(" NOP");
-    //发送帧头
-    SpixRegs->SPITXBUF = writebuffer[0];
-    SpixRegs->SPITXBUF = writebuffer[1];
-    SpixRegs->SPITXBUF = writebuffer[2];
-    //发送数据
-    for(numwords = 0; numwords < numbytes/2 ; numwords++)
+    // Byte 3: Afirst byte of data
+
+    //cmd = offset_addr & 0x1f
+    cmd =(offset_addr & 0x1FE0)<<3; // offset_addr[12:5] is 1st address phase byte, shift to upper byte
+    cmd |= (((offset_addr & 0x1F) << 3) | ESC_ETHERCAT_3BYTEADDR);
+    writephase[0] = cmd;
+    numwords++;
+    cmd = 0x0000;
+    cmd = (((offset_addr & 0xE000) | (ESC_ETHERCAT_WRITE <<10))) ;
+    cmd |= (wrdata[wptr] & 0x00FF);
+    writephase[1] = cmd;
+    numwords++;
+
+#ifdef  USE_SPIB
+    GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;//SPIB片选信号
+#endif
+#ifdef  USE_SPIA
+    GpioDataRegs.GPBCLEAR.bit.GPIO61 = 1;//SPIA片选信号
+#endif
+
+        asm(" NOP");    //need 15ns delay
+        asm(" NOP");
+        asm(" NOP");
+        asm(" NOP");
+        asm(" NOP");
+
+    i = 0;
+
+        SpixRegs->SPITXBUF = writephase[i] & (0xFF00);
+        SpixRegs->SPITXBUF = ((writephase[i++] & (0xFF)) << 8);
+        SpixRegs->SPITXBUF = writephase[i] & (0xFF00);
+        SpixRegs->SPITXBUF = ((writephase[i] & (0xFF)) << 8);
+
+    wptr=0;
+
+    for(j = 1; j < (numbytes-1) ; j+=2)
     {
-        //发送16位字的低字节
-        SpixRegs->SPITXBUF= (((wrdata[numwords]) & 0x00FF) << 8);
-        //发送16位字的高字节
-        SpixRegs->SPITXBUF = ((wrdata[numwords]) & 0xFF00);
+        SpixRegs->SPITXBUF = ((wrdata[wptr]) & 0xFF00);
+        SpixRegs->SPITXBUF= (((wrdata[++wptr]) & 0x00FF) << 8);
+        numwords++;
     }
-    //处理数据单字节
-    if(numbytes % 2 == 1)
+    if(j == (numbytes-1))
     {
-        SpixRegs->SPITXBUF= (((wrdata[numwords]) & 0x00FF) << 8);
+        SpixRegs->SPITXBUF = ((wrdata[wptr]) & 0xFF00);
+        numwords++;
     }
-    //等待全部数据发送完成
+
+    SPI_XmitInProgress=1;
+
     while(SpixRegs->SPIFFTX.bit.TXFFST != 0)
     {
         DELAY_US(2);
-    }
-    //复位SPI
-    SpixRegs->SPIFFTX.bit.TXFIFO=0;
-    SpixRegs->SPIFFRX.bit.RXFIFORESET = 0;
+    };
+
+#ifdef USE_SPIB
+    GpioDataRegs.GPCSET.bit.GPIO66 = 1;//SPIB片选
+#endif
+#ifdef USE_SPIA
+    GpioDataRegs.GPBSET.bit.GPIO61 = 1;//SPIA片选
+#endif
+
     DELAY_US(2);
-    SpixRegs->SPIFFTX.bit.TXFIFO=1;
-    SpixRegs->SPIFFRX.bit.RXFIFORESET = 1;
-    //失能SPI片选信号
-    ESC_SPI_CS_1();
+    SpixRegs->SPIFFTX.bit.TXFIFO=0;     // Reset Tx FIFO
+    SpixRegs->SPIFFRX.bit.RXFIFORESET = 0; //reset the FIFO pointer
+    DELAY_US(2);
+    SpixRegs->SPIFFTX.bit.TXFIFO=1;     // Reset Tx FIFO
+    SpixRegs->SPIFFRX.bit.RXFIFORESET = 1; //reenable the FIFO operation
+
+    SPI_XmitInProgress=0;
+
+
 }
 /***********************************************************************************/
 uint16_t ESC_readWordNonISR(uint16_t offset_addr)
@@ -240,11 +379,9 @@ uint16_t ESC_readWordNonISR(uint16_t offset_addr)
 /***********************************************************************************/
 uint16_t ESC_readWordISR(uint16_t offset_addr)
 {
-    uint16_t data;
-    DINT;
-    ESC_readSPI(offset_addr, 2, &data);
-    EINT;
-    return  data;
+    ESC_readSPI(offset_addr, 2, 0);
+    return  (SPI_RxData[0]);
+
 }
 /***********************************************************************************/
 
@@ -408,6 +545,7 @@ void ESC_initSPIFIFO(void)
 
     // SPI configuration
     SpixRegs->SPIFFTX.bit.TXFFIL = 16;  // Set TX FIFO level
+    SpixRegs->SPICCR.bit.HS_MODE = 0x1; // Set high mode
     SpixRegs->SPICCR.bit.SPICHAR = 0x7;//0xF; // Character Length  = 8
     SpixRegs->SPICCR.bit.CLKPOLARITY = 1; // Rising edge
     SpixRegs->SPICTL.bit.SPIINTENA = 1;     // Enabled
@@ -418,9 +556,11 @@ void ESC_initSPIFIFO(void)
     SpixRegs->SPISTS.all=0x0000;        // Clear Status bits (TxBufFull,INT, Overrun)
 
     // SpixRegs->SPIBRR.all = 0x63;            // LSPCLK/100
-    ClkCfgRegs.LOSPCP.all = 0x2; // 0 = sysclk/1 = 200M; 1 = sysclk/2 = 100M   //ʱ��200M��4���50M
-    SpixRegs->SPIBRR.all=0x004;     // Baud Rate = LSPCLK / (SPIBRR+1) [LSPCLK=SysClk/4 by default=50M]
-    SpixRegs->SPIFFCT.all=0x00;                //50M��5����10M
+
+    ClkCfgRegs.LOSPCP.all = 0x1; // 0 = sysclk/1 = 200M;  1 = sysclk/2 = 100M
+    SpixRegs->SPIBRR.all=0x04;     // Baud Rate = LSPCLK / (SPIBRR+1) [LSPCLK=SysClk/4] = 20MHz
+
+    SpixRegs->SPIFFCT.all=0x00;
     SpixRegs->SPIPRI.all=0x0020;            // Stop after transaction complete on EmuStop
 
     SpixRegs->SPIFFTX.bit.TXFFIENA = 0; // Disable TXFF INT
@@ -431,82 +571,39 @@ void ESC_initSPIFIFO(void)
 
    EDIS;
 }
-/**********************************************************************************
-       函数名称:ESC_initSPIAGpio(void)
-       函数描述:初始化LaunchPad_F28379D评估板SPIA的GPIO引脚
-                         使用LaunchPad_F28379D评估板,则SPIA对应引脚为:
-          GPIO58 (SPISIMOA), GPIO59 (SPISOMIA), GPIO60 (SPICLKA), GPIO61 (SPISTEA)
-       输入参数:
-           返回值:
-**********************************************************************************/
-void ESC_initSPIAGpio(void)
-{
-    /*寄存器版初始代码*/
-    //引脚上拉
-    GpioCtrlRegs.GPBPUD.bit.GPIO58 = 0;//GPIO58 (SPISIMOA)
-    GpioCtrlRegs.GPBPUD.bit.GPIO59 = 0;//GPIO59 (SPISOMIA)
-    GpioCtrlRegs.GPBPUD.bit.GPIO60 = 0;//GPIO60 (SPICLKA)
-    //设置复用功能
-    GpioCtrlRegs.GPBMUX2.bit.GPIO58 = 3;//GPIO58 (SPISIMOA)
-    GpioCtrlRegs.GPBGMUX2.bit.GPIO58 =3;
-    GpioCtrlRegs.GPBMUX2.bit.GPIO59 = 3;//GPIO59 (SPISOMIA)
-    GpioCtrlRegs.GPBGMUX2.bit.GPIO59 = 3;
-    GpioCtrlRegs.GPBMUX2.bit.GPIO60 = 3;//GPIO60 (SPICLKA)
-    GpioCtrlRegs.GPBGMUX2.bit.GPIO60 = 3;
-    //CS片选信号设置为普通GPIO
-    GpioCtrlRegs.GPBPUD.bit.GPIO61 = 0;
-    GpioCtrlRegs.GPBDIR.bit.GPIO61 = 1;
-    GpioCtrlRegs.GPBMUX2.bit.GPIO61 = 0;
-    GpioCtrlRegs.GPBGMUX2.bit.GPIO61 = 0;
-    /*C2000WARE版初始化代码*/
-    GPIO_SetupPinOptions(58,GPIO_OUTPUT,GPIO_PULLUP);
-    GPIO_SetupPinOptions(59,GPIO_INPUT,GPIO_PULLUP);
-    GPIO_SetupPinOptions(60,GPIO_OUTPUT,GPIO_PULLUP);
-    GPIO_SetupPinMux(58,GPIO_MUX_CPU1,15);
-    GPIO_SetupPinMux(59,GPIO_MUX_CPU1,15);
-    GPIO_SetupPinMux(60,GPIO_MUX_CPU1,15);
-    GPIO_SetupPinOptions(61,GPIO_OUTPUT,GPIO_PULLUP);
-    /*driverlib版初始化代码*/
-    GPIO_setPadConfig(58,GPIO_PIN_TYPE_PULLUP);
-    GPIO_setPadConfig(59,GPIO_PIN_TYPE_PULLUP);
-    GPIO_setPadConfig(60,GPIO_PIN_TYPE_PULLUP);
-    GPIO_setPinConfig(GPIO_58_SPISIMOA);
-    GPIO_setPinConfig(GPIO_59_SPISOMIA);
-    GPIO_setPinConfig(GPIO_60_SPICLKA);
-    GPIO_setPadConfig(61,GPIO_PIN_TYPE_PULLUP);
-    GPIO_setPinConfig(GPIO_61_GPIO61);
-    GPIO_setDirectionMode(61, GPIO_DIR_MODE_OUT);
-}
+
 //-----------------------------------------------------------------------------------
 // Function to initialize GPIOs for SPIB port
 //   GPIO64, GPIO65, GPIO66, GPIO63 
-//  Not used in TMDSECATCNCD379D kit
+// brief: GPIO66设置为普通引脚
 //-----------------------------------------------------------------------------------
 void ESC_initSPIBGpio(void)
 {
     EALLOW;
-    // Enable pull-ups on SPISIMO/SPISOMI/SPICLK/SPISTE pins
-    GpioCtrlRegs.GPCPUD.all &= 0xFFFFFFF8;
-    GpioCtrlRegs.GPBPUD.all &= 0xFFFFFFFE;
+        // Enable pull-ups on SPISIMO/SPISOMI/SPICLK/SPISTE pins
+        GpioCtrlRegs.GPCPUD.all &= 0xFFFFFFF8;
+        GpioCtrlRegs.GPBPUD.all &= 0xFFFFFFFE;
 
-    // Enable SPISIMO/SPISOMI/SPICLK pins
-    GpioCtrlRegs.GPCGMUX1.bit.GPIO64 = 0x3;
-    GpioCtrlRegs.GPCMUX1.bit.GPIO64 = 0x3;
-    GpioCtrlRegs.GPCGMUX1.bit.GPIO65 = 0x3;
-    GpioCtrlRegs.GPCMUX1.bit.GPIO65 = 0x3;
-    GpioCtrlRegs.GPCGMUX1.bit.GPIO66 = 0x3;
-    GpioCtrlRegs.GPCMUX1.bit.GPIO66 = 0x3;
-    GpioCtrlRegs.GPBGMUX2.bit.GPIO63 = 0x3;
-    GpioCtrlRegs.GPBMUX2.bit.GPIO63 = 0x3;
+        // Enable SPISIMO/SPISOMI/SPICLK pins
+        GpioCtrlRegs.GPCGMUX1.bit.GPIO64 = 0x3;
+        GpioCtrlRegs.GPCMUX1.bit.GPIO64 = 0x3;
+        GpioCtrlRegs.GPCGMUX1.bit.GPIO65 = 0x3;
+        GpioCtrlRegs.GPCMUX1.bit.GPIO65 = 0x3;
+     //   GpioCtrlRegs.GPCGMUX1.bit.GPIO66 = 0x3;
+     //   GpioCtrlRegs.GPCMUX1.bit.GPIO66 = 0x3;
+        GpioCtrlRegs.GPBGMUX2.bit.GPIO63 = 0x3;
+        GpioCtrlRegs.GPBMUX2.bit.GPIO63 = 0x3;
 
-    // Enable SPISIMO/SPISOMI/SPICLK pins as async
-    GpioCtrlRegs.GPCQSEL1.all |= 0xF;
-    GpioCtrlRegs.GPBQSEL2.bit.GPIO63 = 0x3;
+        // Enable SPISIMO/SPISOMI/SPICLK pins as async
+        GpioCtrlRegs.GPCQSEL1.all |= 0xF;
+        GpioCtrlRegs.GPBQSEL2.bit.GPIO63 = 0x3;
 
     EDIS;
 
+       //GPIO66 set output
+       GPIO_SetupPinOptions(66,GPIO_OUTPUT, GPIO_PULLUP);
+       GPIO_SetupPinMux(66, GPIO_MUX_CPU1, 0);
 }
-
 //-----------------------------------------------------------------------------------
 // Function to initialize GPIOs for SPIC port
 //   GPIO122, GPIO123, GPIO124, GPIO125 
@@ -536,7 +633,25 @@ void ESC_initSPICGpio(void)
     EDIS;
 }
 
+//-----------------------------------------------------------------------------------
+// Function to initialize GPIOs for SPIA port
+//   GPIO58, GPIO59, GPIO60, GPIO61
+//  Not used in TMDSECATCNCD379D kit
+//-----------------------------------------------------------------------------------
+void ESC_initSPIAGpio(void)
+{
+    /*driverlib版初始化代码*/
+    GPIO_setPadConfig(58,GPIO_PIN_TYPE_PULLUP);
+    GPIO_setPadConfig(59,GPIO_PIN_TYPE_PULLUP);
+    GPIO_setPadConfig(60,GPIO_PIN_TYPE_PULLUP);
+    GPIO_setPinConfig(GPIO_58_SPISIMOA);
+    GPIO_setPinConfig(GPIO_59_SPISOMIA);
+    GPIO_setPinConfig(GPIO_60_SPICLKA);
 
+    GPIO_setPadConfig(61,GPIO_PIN_TYPE_PULLUP);
+    GPIO_setPinConfig(GPIO_61_GPIO61);
+    GPIO_setDirectionMode(61, GPIO_DIR_MODE_OUT);
+}
 
 #else //#ifdef INTERFACE_SPI
 
@@ -663,14 +778,14 @@ void ESC_writeWordISR(uint16_t WordValue, uint16_t Address)
 /***********************************************************************************/
 void ESC_releaseET1100Reset(void)
 {
-//      GPIO_SetupPinMux(ESC_RESET_ET1100_GPIO, GPIO_MUX_CPU1, 0);
- //     GPIO_WritePin(ESC_RESET_ET1100_GPIO, 1);  //release reset
+      GPIO_SetupPinMux(ESC_RESET_ET1100_GPIO, GPIO_MUX_CPU1, 0);
+      GPIO_WritePin(ESC_RESET_ET1100_GPIO, 1);  //release reset
 }
 /***********************************************************************************/
 void ESC_holdET1100InReset(void)
 {
- //     GPIO_SetupPinMux(ESC_RESET_ET1100_GPIO, GPIO_MUX_CPU1, 0);
- //     GPIO_WritePin(ESC_RESET_ET1100_GPIO, 0);  //hold in reset
+      GPIO_SetupPinMux(ESC_RESET_ET1100_GPIO, GPIO_MUX_CPU1, 0);
+      GPIO_WritePin(ESC_RESET_ET1100_GPIO, 0);  //hold in reset
 }
 /***********************************************************************************/
 void ESC_configureLatch0GPIO(void)
@@ -691,23 +806,27 @@ void ESC_configureLatch1GPIO(void)
 //-----------------------------------------------------------------------------------
 // ISR to handle PDI ISR
 //-----------------------------------------------------------------------------------
+uint16_t applicationLayerIsrNumber=0;
 interrupt void ESC_applicationLayerISR()
 {
-    //call the slave stack ISR routine
-#if(ETHERCAT_STACK)
+    //调用从机堆栈ISR例程
+#ifdef ETHERCAT_STACK
     PDI_Isr();
 #endif
+    applicationLayerIsrNumber++;
     PieCtrlRegs.PIEACK.all |= 0x01;     // Issue PIE ack
 }
 
 //-----------------------------------------------------------------------------------
 // ISR to handle SYNC0 ISR
 //-----------------------------------------------------------------------------------
+uint16_t applicationSync0IsrNumber=0;
 interrupt void ESC_applicationSync0ISR()
 {
-#if(ETHERCAT_STACK)
+#ifdef ETHERCAT_STACK
     Sync0_Isr();
 #endif
+    applicationSync0IsrNumber++;
     //XINT5, PIE 12.INT3
     PieCtrlRegs.PIEACK.bit.ACK12 = 1;
 }
@@ -715,11 +834,13 @@ interrupt void ESC_applicationSync0ISR()
 //-----------------------------------------------------------------------------------
 // ISR to handle SYNC1 ISR
 //-----------------------------------------------------------------------------------
+uint16_t applicationSync1IsrNumber=0;
 interrupt void ESC_applicationSync1ISR()
 {
-#if(ETHERCAT_STACK)
+#ifdef ETHERCAT_STACK
     Sync1_Isr();
 #endif
+    applicationSync1IsrNumber++;
     //XINT4, PIE 12.INT2
     PieCtrlRegs.PIEACK.bit.ACK12 = 1;
 }
@@ -742,30 +863,33 @@ void ESC_enableSync0DebugOnCCARD(void)
     GpioCtrlRegs.GPAGMUX1.bit.GPIO2 = 0x01; //GPIO2 to OUTPUTXBAR1
     GpioCtrlRegs.GPAMUX1.bit.GPIO2 = 0x01;
     EDIS;
+
 }
 
 
 //-----------------------------------------------------------------------------------
-// Function to configure SYNC0 signal on ControlCard configurations
+// 用于配置SYNC0信号的功能
 //-----------------------------------------------------------------------------------
 void ESC_configureSync0GPIO(void)
 {
-
+    //设置SYNC0引脚为输出引脚
     GPIO_SetupPinOptions(ESC_SYNC0_GPIO, GPIO_INPUT, GPIO_PULLUP| GPIO_ASYNC);
     GPIO_SetupPinMux(ESC_SYNC0_GPIO, GPIO_MUX_CPU1, 0);
-
+    //设置引脚触发外部中断
     EALLOW;
     InputXbarRegs.INPUT14SELECT = ESC_SYNC0_GPIO; //input14 is tied to XINT5
-    PieVectTable.XINT5_INT   = &ESC_applicationSync0ISR;
+    PieVectTable.XINT5_INT = &ESC_applicationSync0ISR;
 
-    XintRegs.XINT5CR.bit.POLARITY = 1;      // Falling edge interrupt
+    XintRegs.XINT5CR.bit.POLARITY = 1;      //下降沿中断
     XintRegs.XINT5CR.bit.ENABLE = 1;
 
-    PieCtrlRegs.PIEIER12.bit.INTx3 = 1;     // Enable Group 1, INT5 (XINT2)
-    IER |= 0x0800;
-    EDIS;   // This is needed to disable write to EALLOW protected registers
+    PieCtrlRegs.PIEIER12.bit.INTx3 = 1;     // 使能 Group 1, INT5 (XINT2)
 
-    ESC_enableSync0DebugOnCCARD();
+    IER |= 0x0800;
+
+    EDIS;
+
+   //ESC_enableSync0DebugOnCCARD();
 }
 
 
@@ -809,35 +933,37 @@ void ESC_configureSync1GPIO(void)
     IER |= 0x0800;
     EDIS;   // This is needed to disable write to EALLOW protected registers
 
-    ESC_enableSync1DebugOnCCARD();
+   //ESC_enableSync1DebugOnCCARD();
 }
 /***********************************************************************************/
 void ESC_resetET1100(void)
 {
 
- //   GPIO_SetupPinMux(ESC_RESET_ET1100_GPIO, GPIO_MUX_CPU1, 0);
- //   GPIO_WritePin(ESC_RESET_ET1100_GPIO, 0);    //hold reset low
- //   DELAY_US(500*1000);
- //   GPIO_WritePin(ESC_RESET_ET1100_GPIO, 1);    //release reset
- //   DELAY_US(500*1000);
+    GPIO_SetupPinMux(ESC_RESET_ET1100_GPIO, GPIO_MUX_CPU1, 0);
+    GPIO_SetupPinOptions(ESC_RESET_ET1100_GPIO,GPIO_OUTPUT,GPIO_PULLUP);
+    GPIO_WritePin(ESC_RESET_ET1100_GPIO, 0);    //hold reset low
+    DELAY_US(500*1000);
+
+    GPIO_WritePin(ESC_RESET_ET1100_GPIO, 1);    //release reset
+    DELAY_US(500*1000);
 }
 /***********************************************************************************/
 uint16_t  ESC_ET1100EEPROMLoadedCheck(void)
 {
-//    uint16_t ii = 0;
-//    GPIO_SetupPinMux(ESC_EEPROM_LOADED_GPIO, GPIO_MUX_CPU1, 0);
-//    while(!GPIO_ReadPin(ESC_EEPROM_LOADED_GPIO))
-//    {
-//      DELAY_US(500*1000);
-//      ii++;
-//      if(ii > 10)
-//          break;
-//    }
-//    if(ii > 10)
-//        return 0;
-//    else
-//        return 1;
-    return 1;
+    uint16_t ii = 0;
+    GPIO_SetupPinMux(ESC_EEPROM_LOADED_GPIO, GPIO_MUX_CPU1, 0);
+    while(!GPIO_ReadPin(ESC_EEPROM_LOADED_GPIO))
+    {
+      DELAY_US(500*1000);
+      ii++;
+      if(ii > 10)
+          break;
+    }
+    if(ii > 10)
+        return 0;
+    else
+        return 1;
+
 }
 
 /***********************************************************************************/
@@ -932,7 +1058,7 @@ void ESC_initHW(void)
     // This function is found in F2837xD_PieVect.c.
     InitPieVectTable();
 
-    //Configure to run EMIF1 on full Rate (EMIF1CLK = CPU1SYSCLK/2)
+    //配置为以全速率运行EMIF1（EMIF1CLK = CPU1SYSCLK / 2）
     EALLOW;
     ClkCfgRegs.PERCLKDIVSEL.bit.EMIF1CLKDIV = 0x1;
     ClkCfgRegs.PERCLKDIVSEL.bit.EMIF2CLKDIV = 0x1;
@@ -944,8 +1070,8 @@ void ESC_initHW(void)
 
 //------------------------------------------------------------------------------
 #ifdef INTERFACE_SPI
-    //TxCnt=0;
-  SPI_XmitInProgress=0;
+
+  SPI_XmitInProgress=0;//标志SPI未在运行
 
 #ifdef USE_SPIA
   SpixRegs = &SpiaRegs;
@@ -960,50 +1086,29 @@ void ESC_initHW(void)
   ESC_initSPIFIFO();
 
   EALLOW;
-//  SpiaRegs.SPIPRI.bit.FREE = 1;                // Set so breakpoints don't disturb xmission
+  PieVectTable.XINT1_INT = &ESC_applicationLayerISR;
+  EDIS;
 
-  // Interrupts that are used in this example are re-mapped to
-  // ISR functions found within this file.
-  EALLOW;  // This is needed to write to EALLOW protected registers
-  PieVectTable.XINT1_INT   = &ESC_applicationLayerISR;
-  EDIS;   // This is needed to disable write to EALLOW protected registers
-
-  // Configure External Interrupt from ET1100
+  // 从ET1200配置外部中断
   EALLOW;
   InputXbarRegs.INPUT4SELECT = ESC_SPI_INT_GPIO ;
   GPIO_SetupPinOptions(ESC_SPI_INT_GPIO, GPIO_INPUT, GPIO_PULLUP | GPIO_ASYNC);
+  EDIS;
 
   EALLOW;
-  //for debug
-#ifdef DEBUG
-  //for debug - the same below code is used for SYNC0/SYNC1 monitoring
-  //user has to either change the GPIO used or comment out the monitoring of SYNC0 or
-  //SYNC1 before enabling below code
+  XintRegs.XINT1CR.bit.POLARITY = 0x0;      // 外部中断1设置为下降沿中断
+  XintRegs.XINT1CR.bit.ENABLE = 1;          //使能外部中断1
 
-  //for debug of Interrupt line.- the below code connects GPIO2 to the GPIO78
-  //internally because on the HW board we cannot put a scope on GPIO78 on CCARD,
+  // 启用此示例所需的中断
+  PieCtrlRegs.PIECTRL.bit.ENPIE = 1;        // 启用PIE块
+  PieCtrlRegs.PIEIER1.bit.INTx4 = 1;        // 使能 Group 1, INT4 (XINT1)
 
-//  OutputXbarRegs.OUTPUT1MUX0TO15CFG.bit.MUX7 = 0x1; //INPUTXBAR4 to OUTPUTXBAR1
-//  OutputXbarRegs.OUTPUT1MUXENABLE.bit.MUX7 = 0x1;
-//
-//  GpioCtrlRegs.GPAGMUX1.bit.GPIO2 = 0x01;
-//  GpioCtrlRegs.GPAMUX1.bit.GPIO2 = 0x01;
-#endif
+  IER=0x01;                            // 使能 CPU INT1
+  EINT;                                // 使能全局中断
 
-  XintRegs.XINT1CR.bit.POLARITY = 0x0;      // Falling edge interrupt
-  XintRegs.XINT1CR.bit.ENABLE = 1;
-  //EDIS;
-
-  // Enable interrupts required for this example
-  PieCtrlRegs.PIECTRL.bit.ENPIE = 1;        // Enable the PIE block
-  PieCtrlRegs.PIEIER1.bit.INTx4 = 1;        // Enable Group 1, INT4 (XINT1)
-
-  IER=0x01;                            // Enable CPU INT1
-  EINT;                                // Enable Global Interrupts
-
-  ESC_passFailSignalSetup();
+  ESC_passFailSignalSetup();          //初始化检查指示灯
 #else
-    // EMIF INTERFACE (16b, async)
+    // 使用EMIF数据接口(16b, async)
 
   // Configure External Interrupt from ET1100
   EALLOW;
@@ -1106,20 +1211,25 @@ void ESC_initHW(void)
   ESC_passFailSignalSetup();
 #endif // USE_EMIF1
 #endif //INTERFACE_SPI
-  EALLOW;
-  //CpuTimer0Regs.TCR.bit.TIE = 1;
-  CpuTimer0Regs.TCR.bit.TSS = 0;    //start timer
 
-  ESC_configureSync0GPIO();
-  ESC_configureSync1GPIO();
+
+  EALLOW;
+
+  CpuTimer0Regs.TCR.bit.TSS = 0;    //开启定时器0
+
+    //配置SYNC0 SYNC1引脚
+    ESC_configureSync0GPIO();
+    ESC_configureSync1GPIO();
   //  ESC_configureLatch0GPIO()
   //  ESC_configureLatch1GPIO();
 
+ //复位ET1200
   ESC_resetET1100();
+ //检查ET1200 EEPROM是否装载
   if(!ESC_ET1100EEPROMLoadedCheck())
   {
-      //EEPROM load failed
-      //signal fail
+      //EEPROM 加载失败
+      //信号错误
 #ifdef USE_EMIF1    //LAUNCHXL Rev2.0 J9 connector option for accessing ET1100
       ESC_passFailSignalSetup();
       //GPIO31 and 34 are EMIF1 signals so re-use them as GPIO
@@ -1127,7 +1237,7 @@ void ESC_initHW(void)
 #endif
         while(1)
         {
-            //fail
+            //失败
             ESC_signalFail();
             DELAY_US(500 * 1000);
         }

@@ -1,47 +1,72 @@
-/*******************************************************************************
- * 文件名称: ethercat_slave_c28x_hal.h
- * 文件说明: 用于EtherCAT从控制器(ESC)的C28x HAL硬件功能驱动
- * 功能说明:
- *         (1)本驱动适用于EtherCAT控制器ET1200/ET1100
- *         (2)本驱动可使用LaunchPad_F28379D评估板测试
- *            如果使用评估板,在全局宏定义中定义_LAUNCHXL_F28379D
- * 完成时间:
- *    版本:
- * 修改记录:
- * *****************************************************************************/
+////###########################################################################
+// $TI Release: C2000 EtherCAT solutions support v1.00 $
+// $Release Date: 07/2017 $
+// $Copyright:
+// Copyright (C) 2017 Texas Instruments Incorporated - http://www.ti.com/
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//
+//   Redistributions of source code must retain the above copyright
+//   notice, this list of conditions and the following disclaimer.
+//
+//   Redistributions in binary form must reproduce the above copyright
+//   notice, this list of conditions and the following disclaimer in the
+//   documentation and/or other materials provided with the
+//   distribution.
+//
+//   Neither the name of Texas Instruments Incorporated nor the names of
+//   its contributors may be used to endorse or promote products derived
+//   from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// $
+//#############################################################################
 #include "F28x_Project.h"
+#include "F2837xD_spi.h"
+
 #ifndef _ETHERCAT_SLAVE_C28x_HAL_H_
 #define _ETHERCAT_SLAVE_C28x_HAL_H_
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-/***********************************宏定义****************************************/
-//-------------------------------使用的器件型号--------------------------------------
-#define HAL_ET1100                   0
-#define HAL_ET1200                   1
-//---------------------------使用EtherCAT从站协议栈----------------------------------
-#define ETHERCAT_STACK               0
 
 
-extern uint16_t*            pEsc; //pointer to the ESC memory
+extern uint16_t* pEsc; //pointer to the ESC memory
 
-//---------EtherCAT从站协议栈中需调用的中断函数(在EtherCAT从站堆栈中定义)---------------------
-#if(ETHERCAT_STICK)
+//
+// extern function prototypes (defined in EtherCAT slave stack)
+//
 extern void Sync0_Isr(void);
 extern void PDI_Isr(void);
 extern void Sync1_Isr(void);
-#endif
+
+//
+// HAL function prototypes
+//
+
 /***********************************************************************************
  * @fn      ESC_getTimer(void);
  * @brief   This function returns the current timer counter value from
  *          CPU Timer0. The C28x CPU Timer counter decrements from
- *          0xFFFFFFFF so a one抯 complement of the current timer counter is
+ *          0xFFFFFFFF so a one鎶� complement of the current timer counter is
  *          returned to the caller
  *
  * @param   None
  *
- * @return  complement of the current CPU TIMER0 counter value
+ * @return  1鎶� complement of the current CPU TIMER0 counter value
  ***********************************************************************************/
 extern uint32_t ESC_getTimer(void);
 
@@ -77,7 +102,7 @@ extern uint32_t ESC_timerIncPerMilliSec(void);
  *              So the function cannot be called from inside another ISR
  *
  * @param
- *      uint16_t offset � 16 bit location address that needs to be read
+ *      uint16_t offset 锟� 16 bit location address that needs to be read
  *
  * @return      16 bit data at the address location offset.
 *****************************************************************************************/
@@ -87,11 +112,11 @@ extern uint16_t ESC_readWordNonISR(uint16_t offset);
 /*****************************************************************************************
  * @fn          ESC_readWordISR
  * @brief       This function returns the 16 bit data value at the address pointed
- *              by the offset parameter. This function doesn抰 alter any interrupt masks.
+ *              by the offset parameter. This function doesn鎶� alter any interrupt masks.
  *              So this function can be called from within another ISR
  *
  * @param
- *      uint16_t offset � 16 bit location address that needs to be read
+ *      uint16_t offset 锟� 16 bit location address that needs to be read
  *
  * @return      16 bit data at the address location offset.
 *****************************************************************************************/
@@ -106,7 +131,7 @@ extern uint16_t ESC_readWordISR(uint16_t offset);
  *              cannot be called from within another ISR
  *
  * @param
- *      uint16_t Address � Address where data has to be read from the ESC
+ *      uint16_t Address 锟� Address where data has to be read from the ESC
  *
  * @return      uint32_t - 32 bits data at the address location.
 *****************************************************************************************/
@@ -116,11 +141,11 @@ extern uint32_t ESC_readDWordNonISR(uint16_t Address);
 /*****************************************************************************************
  * @fn          ESC_readDWordISR
  * @brief       This function returns 32 bits of data at the address pointed by the Address
- *              parameter. This function doesn抰 alter any interrupts while data is read.
+ *              parameter. This function doesn鎶� alter any interrupts while data is read.
  *              So this function can be called from within another ISR
  *
  * @param
- *      uint16_t Address � Address where data has to be read from the ESC
+ *      uint16_t Address 锟� Address where data has to be read from the ESC
  *
  * @return       uint32_t - 32 bits data at the address location.
 *****************************************************************************************/
@@ -131,13 +156,13 @@ extern uint32_t ESC_readDWordISR(uint16_t Address);
  * @fn          ESC_readBlockISR
  * @brief       This function returns block of data of number of bytes equal to length
  *              provided by Len parameter at the address pointed by the Address parameter.
- *              This function doesn抰 alter any interrupt masks.
+ *              This function doesn鎶� alter any interrupt masks.
  *              So this function can be called from within another ISR
  *
  * @param
- *      uint16_t *pData � Pointer to the destination array where the block of data will be copied
- *      uint16_t Address � Address where data has to be read from the ESC
- *      uint16_t Len    � Length of data block in bytes
+ *      uint16_t *pData 锟� Pointer to the destination array where the block of data will be copied
+ *      uint16_t Address 锟� Address where data has to be read from the ESC
+ *      uint16_t Len    锟� Length of data block in bytes
  *
  * @return       none
 *****************************************************************************************/
@@ -152,9 +177,9 @@ extern void ESC_readBlockISR(uint16_t *pData,uint16_t Address,uint16_t Len);
  *              enables the interrupts back after the data is read. So this function
  *              cannot be called from within another ISR
  * @param
- *      uint16_t *pData � Pointer to the destination array where the block of data will be copied
- *      uint16_t Address � Address where data has to be read from the ESC
- *      uint16_t Len    � Length of data block in bytes
+ *      uint16_t *pData 锟� Pointer to the destination array where the block of data will be copied
+ *      uint16_t Address 锟� Address where data has to be read from the ESC
+ *      uint16_t Len    锟� Length of data block in bytes
  *
  * @return       none
 *****************************************************************************************/
@@ -169,8 +194,8 @@ extern void ESC_readBlockNonISR(uint16_t *pData,uint16_t Address,uint16_t Len);
  *              So this function cannot be called from within another ISR.
  *
  * @param
- *      uint16_t DWordValue � 16 bit data value that needs to be written to ESC
- *      uint16_t Address � Address where data has to be written to in the ESC
+ *      uint16_t DWordValue 锟� 16 bit data value that needs to be written to ESC
+ *      uint16_t Address 锟� Address where data has to be written to in the ESC
  *
  * @return       none
 *****************************************************************************************/
@@ -180,12 +205,12 @@ extern void ESC_writeWordNonISR(uint16_t WordValue, uint16_t Address);
 /*****************************************************************************************
  * @fn          ESC_writeWordISR
  * @brief       This function writes 16 bit of data to the address pointed by the Address
- *              parameter. This function doesn抰 alter any interrupt masks. So this
+ *              parameter. This function doesn鎶� alter any interrupt masks. So this
  *              function can be called from within another ISR
  *
  * @param
- *      uint16_t WordValue � 16 bit data value that needs to be written to ESC
- *      uint16_t Address � Address where data has to be written to in the ESC
+ *      uint16_t WordValue 锟� 16 bit data value that needs to be written to ESC
+ *      uint16_t Address 锟� Address where data has to be written to in the ESC
  *
  * @return       none
 *****************************************************************************************/
@@ -200,8 +225,8 @@ extern void ESC_writeWordISR(uint16_t WordValue, uint16_t Address);
  *              So this function cannot be called from within another ISR.
  *
  * @param
- *      uint32_t DWordValue � 32 bit data value that needs to be written to ESC
- *      uint16_t Address � Address where data has to be written to in the ESC
+ *      uint32_t DWordValue 锟� 32 bit data value that needs to be written to ESC
+ *      uint16_t Address 锟� Address where data has to be written to in the ESC
  *
  * @return       none
 *****************************************************************************************/
@@ -211,12 +236,12 @@ extern void ESC_writeDWordNonISR(uint32_t DWordValue, uint16_t Address);
 /*****************************************************************************************
  * @fn          ESC_writeDWordISR
  * @brief       This function writes 32 bit of data to the address pointed by the Address
- *              parameter. This function doesn抰 alter any interrupt masks. So this
+ *              parameter. This function doesn鎶� alter any interrupt masks. So this
  *              function can be called from within another ISR
  *
  * @param
- *      uint32_t DWordValue � 32 bit data value that needs to be written to ESC
- *      uint16_t Address � Address where data has to be written to in the ESC
+ *      uint32_t DWordValue 锟� 32 bit data value that needs to be written to ESC
+ *      uint16_t Address 锟� Address where data has to be written to in the ESC
  *
  * @return       none
 *****************************************************************************************/
@@ -227,14 +252,14 @@ extern void ESC_writeDWordISR(uint32_t DWordValue, uint16_t Address);
  * @fn          ESC_writeBlockISR
  * @brief       This function writes block of data of number of bytes equal to length
  *              provided by Len parameter at the address pointed by the Address parameter.
- *              This function doesn抰 alter any interrupt masks. So this function can
+ *              This function doesn鎶� alter any interrupt masks. So this function can
  *              be called from within another ISR
  *
  * @param
- *      uint16_t *pData � Pointer to the source array where the block of data needs be copied
+ *      uint16_t *pData 锟� Pointer to the source array where the block of data needs be copied
  *                          from, to the destination address in ESC
- *      uint16_t Address � Address where data has to be written to in the ESC
- *      uint16_t Len     � Length of data block in bytes
+ *      uint16_t Address 锟� Address where data has to be written to in the ESC
+ *      uint16_t Len     锟� Length of data block in bytes
  *
  * @return       none
 *****************************************************************************************/
@@ -249,10 +274,10 @@ extern void ESC_writeBlockISR(uint16_t *pData,uint16_t Address,uint16_t Len);
  *              to and enables the interrupts back after the data is written.
  *              So this function cannot be called from within another ISR.
  * @param
- *      uint16_t *pData � Pointer to the source array where the block of data needs be copied
+ *      uint16_t *pData 锟� Pointer to the source array where the block of data needs be copied
  *                          from, to the destination address in ESC
- *      uint16_t Address � Address where data has to be written to in the ESC
- *      uint16_t Len     � Length of data block in bytes
+ *      uint16_t Address 锟� Address where data has to be written to in the ESC
+ *      uint16_t Len     锟� Length of data block in bytes
  *
  * @return       none
 *****************************************************************************************/
@@ -384,6 +409,8 @@ extern void ESC_resetET1100(void);
  * @return       none
 *****************************************************************************************/
 extern void ESC_holdET1100InReset(void);
+
+
 /*****************************************************************************************
  * @fn          ESC_ReleaseET1100reset
  * @brief       This function can be called deactivate the reset signal to ET1100
@@ -417,12 +444,9 @@ extern void ESC_configureSync0GPIO(void);
 *****************************************************************************************/
 extern void ESC_configureSync1GPIO(void);
 
-/****************************************************************************************
- *
- *   PDI功能测试函数声明
- *
- ****************************************************************************************/
+
 #ifdef PDI_HAL_TEST
+
 /*****************************************************************************************
  * @fn           ESC_debugUpdateESCRegLogs
  * @brief        This function optional and loads the set of registers initialized by the
@@ -433,6 +457,8 @@ extern void ESC_configureSync1GPIO(void);
  * @return      none
 *****************************************************************************************/
 extern void ESC_debugUpdateESCRegLogs(void);
+
+
 /*****************************************************************************************
  * @fn          ESC_debugAddESCRegLogs
  * @brief       This function optional and adds a register to the array that can be read
@@ -441,7 +467,7 @@ extern void ESC_debugUpdateESCRegLogs(void);
  *              using PDI interface.
  *
  * @param
- *      uint16_t Address � address of the register that needs to be logged
+ *      uint16_t Address 锟� address of the register that needs to be logged
  *
  * @return       none
 *****************************************************************************************/
@@ -459,72 +485,80 @@ extern void ESC_debugAddESCRegsAddress(uint16_t address);
 *****************************************************************************************/
 extern void ESC_debugInitESCRegLogs(void);
 
-/***************************************数据结构定义*****************************************/
-//-------------------------PDI_HAL_TEST功能测试ET1100寄存器数据--------------------------------
-#if(HAL_ET1100)
+//
+//typedef
+//
+
+// data type to log ET1100 registers for PDI HAL TEST
 typedef struct esc_et1100_regs
 {
     uint16_t address;
     uint16_t data;
 }esc_et1100_regs_t;
-#endif
-//-------------------------PDI_HAL_TEST功能测试ET1200寄存器数据--------------------------------
-#if(HAL_ET1200)
-typedef struct esc_et1200_regs
-{
-    uint16_t address;
-    uint16_t data;
-}esc_et1200_regs_t;
-#endif
+
 #endif  //PDI_HAL_TEST
-/*************************************器件信息宏定义****************************************/
-#if(HAL_ET1100)
-        //ET1100用户RAM地址(8K)
-        #define ESC_PDI_RAM_START_ADDRESS_OFFSET    0x1000
-        #define ESC_PDI_RAM_END_ADDRESS_OFFSET      0x2FFF
-#endif
-#if(HAL_ET1200)
-        //ET1200用户RAM地址(1K)
-        #define ESC_PDI_RAM_START_ADDRESS_OFFSET    0x1000
-        #define ESC_PDI_RAM_END_ADDRESS_OFFSET      0x13FF
-#endif
-/*****************************************************************************************
- * 设置硬件接口:
- * 在LaunchPad F28379D评估板上使用SPI接口
- *****************************************************************************************/
-#ifdef _LAUNCHXL_F28379D  //LaunchPad F28379D评估板
 
-    #ifdef INTERFACE_SPI  //使用SPI接口
 
+/*
+ * Board Configurations available
+ *
+ *
+ * F2837x Control CARD Interface to ET1100 (PDI access definition):
+ *          - EMIF1 (connections sample provided) - not supported in TMDSECATCNCD379D kit
+ *          - EMIF2 Ethercat daughter card connected to Control card using HighRose connecter
+ *          - SPIC  Ethercat daughter card connected to Control card using HighRose connecter
+ *
+ * F2837x Dual Core Launch Pad Interface to ET1100 (PDI access definition):
+ *          - EMIF1 EtherCAT booster pack connected to launch pad using HighRose Connector
+ *
+ * $$$$$$$$$NOTE TO USER $$$$$$$$
+ * ONLY LAUNCHXL REV2.0 is supported
+ * To enable usage of EMIF1 with LaunchPad, user needs to enable USE_EMIF1 define as below
+ *    - select build config _1_F2837xD_CCARD_EMIF_FLASH or _2_F2837xD_CCARD_EMIF_RAM
+ *    - uncomment below macro for USE_EMIF1
+ *    - rebuild the project.
+ *    Now user should be able to connect the ET1100 daughter card to high rose connector J9
+ *    on the Dual core LaunchPAD (LAUNCHPAD XL Rev2.0 for F28379D)
+ */
+
+// the below define is moved to F2837xD_device.h because of PLL dependency
+//#define USE_EMIF1     //LAUNCHXL Rev2.0 J9 connector option for accessing ET1100
+
+#ifdef CONTROLCARD  //for Controlcard definitions
+
+    #ifdef INTERFACE_SPI
 #ifdef USE_EMIF1
     #error "user cannot use EMIF1 with SPI Configurations of project"
 #endif
-    extern void ESC_initSPI(void);
-    extern void ESC_readSPI(uint16_t offset_addr,uint16_t numbytes, uint16_t* buffer);
-    extern void ESC_writeSPI(uint16_t offset_addr,uint16_t *wrdata, uint16_t numwords);
-//------------------------------使用LaunchPad F28379D SPIA接口-------------------------------
-#ifdef USE_SPIA
-    #define ESC_SPI_CS_GPIO                     61
-//------------------------------使用LaunchPad F28379D SPIB接口-------------------------------
-#elif  USE_SPIB
-    #define ESC_SPI_CS_GPIO                     61
+        extern void ESC_initSPI(void);
+        extern void ESC_readSPI(uint16_t offset_addr,uint16_t numbytes, uint16_t* buffer);
+        extern void ESC_writeSPI(uint16_t offset_addr,uint16_t *wrdata, uint16_t numwords) ;
+#ifdef  USE_SPIA
+        #define ESC_SPI_INT_GPIO           22
 #endif
-//------------------------------------SPI中断信号引脚编号--------------------------------------
-    #define ESC_SPI_INT_GPIO                    22
-//------------------------------------SYNC0中断信号引脚编号------------------------------------
-    #define ESC_SYNC0_GPIO                      19
-//------------------------------------SYNC1中断信号引脚编号------------------------------------
-    #define ESC_SYNC1_GPIO                      0
-//---------------------------------------器件复位引脚编号--------------------------------------
-    #define ESC_DEVICE_RESET_GPIO               0
-//------------------------------------EEPROM加载信号引脚编号-----------------------------------
-    #define ESC_EEPROM_LOADED_GPIO              0
-//---------------------------------------引脚输入控制宏定义------------------------------------
-    #define ESC_SPI_CS_1()              GPIO_writePin(ESC_SPI_CS_GPIO, 1)
-    #define ESC_SPI_CS_0()              GPIO_writePin(ESC_SPI_CS_GPIO, 0)
-    #define ESC_DEVICE_RESET_1()        GPIO_writePin(ESC_SPI_CS_GPIO, 1)
-    #define ESC_DEVICE_RESET_0()        GPIO_writePin(ESC_SPI_CS_GPIO, 0)
+#ifdef  USE_SPIB
+        #define ESC_SPI_INT_GPIO           52
+#endif
+        //on ET1100 it is 8KB of RAM
+//      #define ESC_PDI_RAM_START_ADDRESS_OFFSET    0x1000
+//      #define ESC_PDI_RAM_END_ADDRESS_OFFSET      0x2FFF
 
+        //on ET1200 it is 1KB of RAM
+        #define ESC_PDI_RAM_START_ADDRESS_OFFSET    0x1000
+        #define ESC_PDI_RAM_END_ADDRESS_OFFSET      0x13FF
+#ifdef USE_SPIA
+        #define ESC_SYNC0_GPIO              19
+        #define ESC_SYNC1_GPIO              19
+        #define ESC_RESET_ET1100_GPIO       122
+        #define ESC_EEPROM_LOADED_GPIO      4
+#endif
+
+#ifdef  USE_SPIB
+     #define ESC_SYNC0_GPIO              139
+     #define ESC_SYNC1_GPIO              139
+     #define ESC_RESET_ET1100_GPIO       122
+     #define ESC_EEPROM_LOADED_GPIO      10
+#endif
     #else //#ifdef INTERFACE_SPI
 
         extern void setup_emif1_pinmux_async_16bit(Uint16 cpu_sel);
@@ -532,11 +566,14 @@ typedef struct esc_et1200_regs
         extern void ESC_writeBlockEMIF2(uint16_t* pData, uint16_t offset_addr,uint16_t numwords);
 
         #ifdef USE_EMIF1 //LaunchPAD XL EMIF1 J9 connector option
+            //on ET1100 it is 8KB of RAM
+            #define ESC_PDI_RAM_START_ADDRESS_OFFSET    0x1000
+            #define ESC_PDI_RAM_END_ADDRESS_OFFSET      0x1FFF
             #define ESC_EMIF_INT_GPIO                   107
             #define ESC_SYNC0_GPIO                      86
             #define ESC_SYNC1_GPIO                      87
             #define ESC_RESET_ET1100_GPIO               108
-            #define ESC_EEPROM_LOADED_GPIO              52
+            #define ESC_EEPROM_LOADED_GPIO              52  //this was 33 on LAUNCXL Rev1.1
 
         #else // #ifdef ESC_USE_EMIF1   //USE EMIF2
             #define ESC_EMIF_INT_GPIO   136
@@ -544,6 +581,8 @@ typedef struct esc_et1200_regs
 
             //0x0 to 0x1000 of ET1100 will be 0x2000[0] to 0x2000[0x800] of EMIF2 address sapce
             //0x1000 to 0x2000 of ET1100 will be 0x2000[0x800] to 0x2000[0x1000] of EMIF2 address space
+            #define ESC_PDI_RAM_START_ADDRESS_OFFSET    0x1000
+            #define ESC_PDI_RAM_END_ADDRESS_OFFSET      0x1FFF
             #define ESC_SYNC0_GPIO              113
             #define ESC_SYNC1_GPIO              114
             #define ESC_RESET_ET1100_GPIO       137
@@ -553,20 +592,16 @@ typedef struct esc_et1200_regs
 
 #endif //#ifdef INTERFACE_SPI
 
-#else //#ifdef _LAUNCHXL_F28379D
-      //用户自定义驱动板硬件
-      #define ESC_SPI_CS_GPIO                     61
+#endif  //#ifdef CONTROLCARD
 
 
-#endif
-
-#define ESC_ETHERCAT_READ           0b010  //读数据
-#define ESC_ETHERCAT_READ_WAIT      0b011  //读数据
+#define ESC_ETHERCAT_READ           0b010
+#define ESC_ETHERCAT_READ_WAIT      0b011
 #define ESC_ETHERCAT_WRITE          0b100
 #define ESC_ETHERCAT_3BYTEADDR      0b110
 #define ESC_ETHERCAT_WAIT           0xFF
-#define ESC_ETHERCAT_CONTINUE       0x00   //帧格式读数据等待数据字节
-#define ESC_ETHERCAT_RDTERMINATE    0xFF   //帧格式结尾字节
+#define ESC_ETHERCAT_CONTINUE       0x00
+#define ESC_ETHERCAT_RDTERMINATE    0xFF
 
 #define ESC_DEBUG_REGS_LENGTH       20
 

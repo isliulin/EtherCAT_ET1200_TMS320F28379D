@@ -13,7 +13,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdlib.h>
 //--------------------F2837xD头文件---------------------
 #include "F2837xD_Examples.h"
 #include "F2837xD_device.h"
@@ -22,8 +21,8 @@
 //#include "F021_F2837xD_C28x.h"
 
 /******************************************************
-函数名称:USER_getLibVersion
-函数描述：获取使用的driverlib库版本
+函数名称: USER_getLibVersion
+函数描述: 获取使用的driverlib库版本
 输入参数:
 返回值:
 ******************************************************/
@@ -33,8 +32,8 @@ Uint32 USER_getLibVersion()
    return(Version_getLibVersion());
 }
 /******************************************************
-函数名称:USER_getWareVersion
-函数描述：获取使用的C2000ware版本
+函数名称: USER_getWareVersion
+函数描述: 获取使用的C2000ware版本
 输入参数:
 返回值:
 ******************************************************/
