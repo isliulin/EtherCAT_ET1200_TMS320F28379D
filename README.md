@@ -1,2 +1,5 @@
 # EtherCAT_ET1200_TMS320F28379D
 EtherCAT协议栈在TMS320F28379D上移植基于ET1200通信芯片
+# 分支说明
+## ETHERCAT_CIA402_2AXIS
+软件模拟两个轴，使用CIA402控制方式进行模拟控制
