@@ -13,9 +13,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdlib.h>
 //--------------------F2837xD头文件---------------------
 #include "F2837xD_Examples.h"
+#include "F2837xD_Ipc_drivers.h"
 #include "F2837xD_device.h"
 #include "device.h"
 //--------------------Flash API------------------------
